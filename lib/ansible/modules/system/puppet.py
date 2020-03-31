@@ -63,7 +63,7 @@ options:
     - Where the puppet logs should go, if puppet apply is being used.
     - C(all) will go to both C(stdout) and C(syslog).
     type: str
-    choices: [ all, stdout, syslog ]
+    choices: [ all, stdout, syslog, file ]
     default: stdout
     version_added: "2.1"
   certname:
@@ -185,7 +185,9 @@ def main():
             noop=dict(required=False, type='bool'),
             logdest=dict(type='str', default='stdout', choices=['all',
                                                                 'stdout',
-                                                                'syslog']),
+                                                                'syslog',
+                                                                'none',]),
+            logdest_file=dict(type='str'),
             # internal code to work with --diff, do not use
             show_diff=dict(type='bool', default=False, aliases=['show-diff']),
             facts=dict(type='dict'),
@@ -258,55 +260,47 @@ def main():
             cmd += " --server %s" % shlex_quote(p['puppetmaster'])
         if p['show_diff']:
             cmd += " --show_diff"
-        if p['environment']:
-            cmd += " --environment '%s'" % p['environment']
-        if p['tags']:
-            cmd += " --tags '%s'" % ','.join(p['tags'])
-        if p['certname']:
-            cmd += " --certname='%s'" % p['certname']
-        if module.check_mode:
-            cmd += " --noop"
         if p['use_srv_records'] is not None:
             if not p['use_srv_records']:
                 cmd += " --no-use_srv_records"
             else:
                 cmd += " --use_srv_records"
-        elif 'noop' in p:
-            if p['noop']:
-                cmd += " --noop"
-            else:
-                cmd += " --no-noop"
     else:
         cmd = "%s apply --detailed-exitcodes " % base_cmd
-        if p['logdest'] == 'syslog':
-            cmd += "--logdest syslog "
-        if p['logdest'] == 'all':
-            cmd += " --logdest syslog --logdest stdout"
         if p['modulepath']:
             cmd += "--modulepath='%s'" % p['modulepath']
-        if p['environment']:
-            cmd += "--environment '%s' " % p['environment']
-        if p['certname']:
-            cmd += " --certname='%s'" % p['certname']
-        if p['tags']:
-            cmd += " --tags '%s'" % ','.join(p['tags'])
-        if module.check_mode:
-            cmd += "--noop "
-        elif 'noop' in p:
-            if p['noop']:
-                cmd += " --noop"
-            else:
-                cmd += " --no-noop"
         if p['execute']:
             cmd += " --execute '%s'" % p['execute']
         else:
             cmd += shlex_quote(p['manifest'])
         if p['summarize']:
             cmd += " --summarize"
-        if p['debug']:
-            cmd += " --debug"
-        if p['verbose']:
-            cmd += " --verbose"
+
+    # valid for both cases
+    if module.check_mode:
+      cmd += " --noop"
+    elif 'noop' in p:
+      if p['noop']:
+        cmd += " --noop"
+      else:
+        cmd += " --no-noop"
+    if p['tags']:
+      cmd += " --tags '%s'" % ','.join(p['tags'])
+    if p['certname']:
+      cmd += " --certname='%s'" % p['certname']
+    if p['environment']:
+      cmd += " --environment '%s'" % p['environment']
+    if p['debug']:
+      cmd += " --debug"
+    if p['verbose']:
+      cmd += " --verbose"
+    if 'syslog' in p['logdest'] or 'all' in p['logdest']:
+      cmd += " --logdest syslog"
+    if 'stdout' in p['logdest'] or 'all' in p['logdest']:
+      cmd += " --logdest console"
+    if p['logdest_file']:
+      cmd += " --logdest '%s'" % p['logdest_file']
+
     rc, stdout, stderr = module.run_command(cmd)
 
     if rc == 0:
